@@ -1,4 +1,4 @@
-﻿using maze_generation_algorithms.Utils;
+﻿using maze_generation_algorithms.Models;
 
 namespace maze_generation_algorithms;
 

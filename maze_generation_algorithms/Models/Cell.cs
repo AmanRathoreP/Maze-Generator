@@ -1,4 +1,4 @@
-namespace maze_generation_algorithms.Utils;
+namespace maze_generation_algorithms.Models;
 
 public class Cell
 {
