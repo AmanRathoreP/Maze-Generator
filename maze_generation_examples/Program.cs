@@ -11,16 +11,25 @@ maze.ConnectCells(11, 11, 10,11);
 maze.ConnectCells(3, 1, 4,1);
 maze.ConnectCells(9, 9, 9,10);
 
-// Example 7: Freeze important cells to protect them from modifications
-maze.FreezeCell(8, 8);
-maze.FreezeCell(8, 9);
-maze.FreezeCell(9, 8);
-maze.FreezeCell(9, 9);
-maze.FreezeCell(1, 1);
-maze.FreezeCell(3, 1);
-maze.FreezeCell(2, 1);
-maze.FreezeCell(2, 2);
-maze.FreezeCell(1, 2);
+
+maze.FreezeAndConnectCells(new List<(int, int)>
+    {
+        (8, 8),
+        (8, 9),
+        (9, 8),
+        (9, 9),
+    });
+
+maze.FreezeAndConnectCells(new List<(int, int)>
+    {
+        (1, 1),
+        (3, 1),
+        (2, 1),
+        (2, 2),
+        (2, 3),
+        (1, 2),
+    });
+
 
 var generator = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, 54871);
 var generatedMaze = generator.Generate(in maze);

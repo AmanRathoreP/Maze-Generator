@@ -292,5 +292,65 @@ namespace maze_generation_algorithms.DataStructures
             
             return clonedMaze;
         }
+
+        /// <summary>
+        /// Freezes a list of cells and optionally connects them in sequence
+        /// </summary>
+        /// <param name="cellPositions">List of (row, column) tuples representing cell positions</param>
+        /// <param name="connectPath">If true, connects cells in the order they appear in the list</param>
+        /// <returns>Number of cells successfully frozen</returns>
+        /// <exception cref="ArgumentNullException">If cellPositions is null</exception>
+        /// <exception cref="ArgumentException">If cellPositions is empty or contains invalid positions</exception>
+        public int FreezeAndConnectCells(List<(int row, int column)> cellPositions, bool connectPath = true)
+        {
+            if (cellPositions == null)
+                throw new ArgumentNullException(nameof(cellPositions));
+
+            if (cellPositions.Count == 0)
+                throw new ArgumentException("Cell positions list cannot be empty", nameof(cellPositions));
+
+            // Validate all positions first
+            foreach (var (row, column) in cellPositions)
+            {
+                ValidatePosition(row, column);
+            }
+
+            // Connect cells in sequence if requested
+            if (connectPath && cellPositions.Count > 1)
+            {
+                // Create HashSet for O(1) lookup instead of O(n) linear search
+                var positionSet = new HashSet<(int, int)>(cellPositions);
+                
+                foreach (var (r, c) in cellPositions)
+                {
+                    var adj_cells = GetAdjacentCells(r, c);
+                    foreach (var adj in adj_cells)
+                    {
+                        var adjPos = (adj.Row, adj.Column);
+                        // O(1) lookup instead of O(n) loop
+                        if (positionSet.Contains(adjPos))
+                        {
+                            // Avoid duplicate connections
+                            if (!AreConnected(r, c, adj.Row, adj.Column))
+                            {
+                                ConnectCells(r, c, adj.Row, adj.Column);
+                            }
+                        }
+                    }
+                }
+            }
+
+            int frozenCount = 0;
+            // Freeze all cells
+            foreach (var (row, column) in cellPositions)
+            {
+                if (!IsCellFrozen(row, column))
+                {
+                    FreezeCell(row, column);
+                    frozenCount++;
+                }
+            }
+            return frozenCount;
+        }
     }
 }
