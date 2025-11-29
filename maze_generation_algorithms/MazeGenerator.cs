@@ -1,4 +1,6 @@
-﻿using maze_generation_algorithms.Models;
+﻿using System;
+using maze_generation_algorithms.Algorithms;
+using maze_generation_algorithms.DataStructures;
 
 namespace maze_generation_algorithms;
 
@@ -6,34 +8,55 @@ public enum MazeAlgorithm
 {
     BinaryTree,
     Prim,
+    RandomWithValidPath,
 }
 
+/// <summary>
+/// Main class for generating mazes using different algorithms.
+/// Respects frozen cells and their connections during generation.
+/// </summary>
 public class MazeGenerator
 {
-    public int Rows { get; }
-    public int Columns { get; }
-    public List<Cell> StartingCells { get; }
-    public List<Cell> EndingCells { get; }
-    public int Seed { get; }
+    private readonly IMazeAlgorithm _algorithm;
+    private readonly int _seed;
 
-    public MazeGenerator(int rows, int columns, List<Cell> startingCells, List<Cell> endingCells, int seed)
+    /// <summary>
+    /// Initializes a new MazeGenerator with the specified algorithm and seed
+    /// </summary>
+    /// <param name="algorithm">The maze generation algorithm to use</param>
+    /// <param name="seed">Random seed for reproducible generation</param>
+    public MazeGenerator(MazeAlgorithm algorithm, int seed)
     {
-        if (rows <= 0)
-            throw new ArgumentException("Rows must be greater than 0", nameof(rows));
-        
-        if (columns <= 0)
-            throw new ArgumentException("Columns must be greater than 0", nameof(columns));
-        
-        if (startingCells == null || startingCells.Count == 0)
-            throw new ArgumentException("Starting cells cannot be null or empty", nameof(startingCells));
-        
-        if (endingCells == null || endingCells.Count == 0)
-            throw new ArgumentException("Ending cells cannot be null or empty", nameof(endingCells));
+        _algorithm = CreateAlgorithm(algorithm);
+        _seed = seed;
+    }
 
-        Rows = rows;
-        Columns = columns;
-        StartingCells = [.. startingCells];
-        EndingCells = [.. endingCells];
-        Seed = seed;
+    /// <summary>
+    /// Generates a maze using the configured algorithm.
+    /// The original maze is not modified; a new maze is returned.
+    /// Frozen cells and their connections are preserved in the copy.
+    /// </summary>
+    /// <param name="maze">The maze template. Original will not be modified.</param>
+    /// <returns>A new generated maze with connections (original maze unchanged)</returns>
+    public Maze Generate(in Maze maze)
+    {
+        if (maze == null)
+            throw new ArgumentNullException(nameof(maze));
+
+        return _algorithm.Generate(in maze, in _seed);
+    }
+
+    /// <summary>
+    /// Creates an instance of the appropriate algorithm implementation
+    /// </summary>
+    private IMazeAlgorithm CreateAlgorithm(MazeAlgorithm algorithm)
+    {
+        return algorithm switch
+        {
+            MazeAlgorithm.RandomWithValidPath => new RandomWithValidPathAlgorithm(),
+            MazeAlgorithm.BinaryTree => throw new NotImplementedException("BinaryTree algorithm not yet implemented"),
+            MazeAlgorithm.Prim => throw new NotImplementedException("Prim algorithm not yet implemented"),
+            _ => throw new ArgumentException($"Unknown algorithm: {algorithm}", nameof(algorithm))
+        };
     }
 }

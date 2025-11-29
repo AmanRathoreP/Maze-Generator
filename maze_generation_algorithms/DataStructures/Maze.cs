@@ -234,5 +234,63 @@ namespace maze_generation_algorithms.DataStructures
             // Adjacent means one unit apart in either row or column, but not both
             return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1);
         }
+
+        /// <summary>
+        /// Creates a deep copy of the maze with all cells and their connections
+        /// </summary>
+        /// <returns>A new Maze instance with identical structure</returns>
+        public Maze Clone()
+        {
+            var clonedMaze = new Maze(_rows, _columns);
+            
+            // Dictionary to map original cells to cloned cells
+            var cellMapping = new Dictionary<MazeCell, MazeCell>();
+            
+            // First pass: Build mapping (don't freeze yet)
+            for (int row = 1; row <= _rows; row++)
+            {
+                for (int col = 1; col <= _columns; col++)
+                {
+                    var originalCell = _cells[row - 1, col - 1];
+                    var clonedCell = clonedMaze._cells[row - 1, col - 1];
+                    cellMapping[originalCell] = clonedCell;
+                }
+            }
+            
+            // Second pass: Copy connections (before freezing)
+            for (int row = 1; row <= _rows; row++)
+            {
+                for (int col = 1; col <= _columns; col++)
+                {
+                    var originalCell = _cells[row - 1, col - 1];
+                    var clonedCell = clonedMaze._cells[row - 1, col - 1];
+                    
+                    foreach (var originalNeighbor in originalCell.Neighbors)
+                    {
+                        var clonedNeighbor = cellMapping[originalNeighbor];
+                        // Only add if not already added (to avoid duplicates from bidirectional connections)
+                        if (!clonedCell.Neighbors.Contains(clonedNeighbor))
+                        {
+                            clonedCell.AddNeighbor(clonedNeighbor);
+                        }
+                    }
+                }
+            }
+            
+            // Third pass: Freeze cells after all connections are established
+            for (int row = 1; row <= _rows; row++)
+            {
+                for (int col = 1; col <= _columns; col++)
+                {
+                    var originalCell = _cells[row - 1, col - 1];
+                    if (originalCell.IsFrozen)
+                    {
+                        clonedMaze.FreezeCell(row, col);
+                    }
+                }
+            }
+            
+            return clonedMaze;
+        }
     }
 }

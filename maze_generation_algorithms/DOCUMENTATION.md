@@ -2,23 +2,56 @@
 
 ## Table of Contents
 1. [Overview](#overview)
-2. [Cell Class](#cell-class)
-3. [MazeCell Class](#mazecell-class)
-4. [Maze Class](#maze-class)
-5. [Usage Examples](#usage-examples)
-6. [Best Practices](#best-practices)
+2. [Architecture](#architecture)
+3. [Cell Class](#cell-class)
+4. [MazeCell Class](#mazecell-class)
+5. [Maze Class](#maze-class)
+6. [IMazeAlgorithm Interface](#imazealgorithm-interface)
+7. [MazeGenerator Class](#mazegenerator-class)
+8. [RandomWithValidPath Algorithm](#randomwithvalidpath-algorithm)
+9. [Usage Examples](#usage-examples)
+10. [Best Practices](#best-practices)
 
 ---
 
 ## Overview
 
-This project provides a robust framework for generating and manipulating maze structures. It uses a tree-based data structure where cells can be connected to form paths, with support for freezing cells to prevent modifications.
+This project provides a robust framework for generating and manipulating maze structures. It uses a tree-based data structure where cells can be connected to form paths, with support for freezing cells to prevent modifications. The architecture follows SOLID principles with an interface-based design for maze generation algorithms.
 
 ### Key Concepts
 - **1-based Indexing**: All row and column numbers start from 1 (no zeros or negatives)
 - **Orthogonal Connections**: Cells can only connect to adjacent neighbors (up, down, left, right - no diagonals)
 - **Bidirectional Edges**: Connections between cells are always bidirectional
 - **Immutable Frozen State**: Once a cell is frozen, its connections cannot be modified
+- **Deep Cloning**: Maze objects can be cloned, creating independent copies in separate memory
+- **Algorithm Independence**: Multiple algorithms can be plugged in through the IMazeAlgorithm interface
+- **Immutable Generation**: Algorithms never modify the input maze, always returning a new copy
+
+---
+
+## Architecture
+
+The system is designed with a clear separation of concerns:
+
+```
+Models/
+  ├── Cell.cs                    # Basic cell with coordinates
+  └── MazeCell.cs               # Maze cell with connections and frozen state
+
+DataStructures/
+  └── Maze.cs                   # Maze grid structure with connection management
+
+Algorithms/
+  ├── IMazeAlgorithm.cs        # Interface for maze generation algorithms
+  └── RandomWithValidPathAlgorithm.cs  # Specific algorithm implementation
+
+MazeGenerator.cs               # Main entry point using factory pattern
+```
+
+### Design Patterns Used
+- **Factory Pattern**: MazeGenerator creates appropriate algorithm instances
+- **Strategy Pattern**: Different algorithms can be swapped via IMazeAlgorithm interface
+- **Template Method**: Clone() provides consistent deep copying mechanism
 
 ---
 
@@ -656,11 +689,480 @@ Console.WriteLine(adjacent.Count); // Output: 3
 // To get connected neighbors, use GetNeighbors()
 ```
 
+### Example 6: Complete Workflow
+
+```csharp
+using maze_generation_algorithms;
+using maze_generation_algorithms.DataStructures;
+
+class MazeGenerationExample
+{
+    public static void Main()
+    {
+        // Step 1: Create template with desired dimensions
+        var template = new Maze(25, 25);
+        
+        // Step 2: Define frozen regions (optional)
+        // Create entrance
+        template.FreezeCell(1, 1);
+        template.ConnectCells(1, 1, 1, 2);
+        template.ConnectCells(1, 1, 2, 1);
+        template.FreezeCell(1, 2);
+        template.FreezeCell(2, 1);
+        
+        // Create exit
+        template.FreezeCell(25, 25);
+        template.FreezeCell(25, 24);
+        template.FreezeCell(24, 25);
+        template.ConnectCells(25, 25, 25, 24);
+        template.ConnectCells(25, 25, 24, 25);
+        
+        // Step 3: Create generator
+        var generator = new MazeGenerator(
+            MazeAlgorithm.RandomWithValidPath, 
+            seed: DateTime.Now.Millisecond // Random seed
+        );
+        
+        // Step 4: Generate maze
+        var maze = generator.Generate(in template);
+        
+        // Step 5: Use the maze
+        Console.WriteLine($"Generated {maze.Rows}x{maze.Columns} maze");
+        Console.WriteLine($"Entrance frozen: {maze.IsCellFrozen(1, 1)}");
+        Console.WriteLine($"Exit frozen: {maze.IsCellFrozen(25, 25)}");
+        
+        // Step 6: Verify connectivity
+        Console.WriteLine($"Entrance has {maze.GetNeighbors(1, 1).Count} connections");
+        Console.WriteLine($"Exit has {maze.GetNeighbors(25, 25).Count} connections");
+        
+        // Template is unchanged - can generate more variations
+        var maze2 = generator.Generate(in template);
+        var maze3 = generator.Generate(in template);
+    }
+}
+```
+
+### Example 7: Custom Algorithm Implementation
+
+```csharp
+using maze_generation_algorithms.Algorithms;
+using maze_generation_algorithms.DataStructures;
+
+// Implement a custom algorithm
+public class SimpleGridAlgorithm : IMazeAlgorithm
+{
+    public Maze Generate(in Maze maze, in int seed)
+    {
+        // Clone to avoid modifying original
+        var mazeCopy = maze.Clone();
+        var random = new Random(seed);
+        
+        // Connect cells in a simple grid pattern
+        for (int row = 1; row <= mazeCopy.Rows; row++)
+        {
+            for (int col = 1; col <= mazeCopy.Columns; col++)
+            {
+                // Skip frozen cells
+                if (mazeCopy.IsCellFrozen(row, col))
+                    continue;
+                
+                // Randomly connect right
+                if (col < mazeCopy.Columns && 
+                    !mazeCopy.IsCellFrozen(row, col + 1) &&
+                    random.Next(2) == 0)
+                {
+                    mazeCopy.ConnectCells(row, col, row, col + 1);
+                }
+                
+                // Randomly connect down
+                if (row > 1 && 
+                    !mazeCopy.IsCellFrozen(row - 1, col) &&
+                    random.Next(2) == 0)
+                {
+                    mazeCopy.ConnectCells(row, col, row - 1, col);
+                }
+            }
+        }
+        
+        return mazeCopy;
+    }
+}
+
+// Usage
+var template = new Maze(10, 10);
+var algorithm = new SimpleGridAlgorithm();
+var maze = algorithm.Generate(in template, in 12345);
+```
+
 ---
 
-## Usage Examples
+## Best Practices
 
-### Example 1: Creating a Simple Maze Path
+### 1. Always Use 1-Based Indexing
+```csharp
+// ✓ CORRECT
+var cell = maze.GetCell(1, 1); // First cell
+
+// ✗ WRONG
+var cell = maze.GetCell(0, 0); // Will throw exception
+```
+
+### 2. Never Modify Input Mazes in Algorithms
+```csharp
+// ✓ CORRECT - Clone first
+public Maze Generate(in Maze maze, in int seed)
+{
+    var mazeCopy = maze.Clone();
+    // Work on mazeCopy
+    return mazeCopy;
+}
+
+// ✗ WRONG - Modifies original
+public Maze Generate(in Maze maze, in int seed)
+{
+    maze.ConnectCells(1, 1, 1, 2); // Don't do this!
+    return maze;
+}
+```
+
+### 3. Use `in` Keyword for Readonly Semantics
+```csharp
+// ✓ CORRECT - Indicates no modification
+public Maze Generate(in Maze maze, in int seed)
+
+// ✓ ALSO CORRECT - When calling
+var result = generator.Generate(in template);
+```
+
+### 4. Check Frozen Status Before Modification
+```csharp
+// ✓ CORRECT
+if (!maze.IsCellFrozen(5, 5) && !maze.IsCellFrozen(5, 6))
+{
+    maze.ConnectCells(5, 5, 5, 6);
+}
+
+// ✓ ALSO CORRECT - Check return value
+bool success = maze.ConnectCells(5, 5, 5, 6);
+if (!success)
+{
+    Console.WriteLine("Connection failed - cell may be frozen");
+}
+```
+
+### 5. Use Seeds for Reproducibility
+```csharp
+// ✓ CORRECT - Reproducible generation
+int seed = 12345;
+var gen1 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed);
+var gen2 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed);
+
+var maze1 = gen1.Generate(in template);
+var maze2 = gen2.Generate(in template);
+// maze1 and maze2 are identical
+
+// ✓ FOR VARIETY - Use different seeds
+var gen3 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 67890);
+var maze3 = gen3.Generate(in template);
+// maze3 is different
+```
+
+### 6. Reuse Templates for Multiple Generations
+```csharp
+// ✓ CORRECT - Efficient reuse
+var template = new Maze(20, 20);
+// Set up frozen cells once
+template.FreezeCell(1, 1);
+template.FreezeCell(20, 20);
+
+// Generate multiple variations
+var gen = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 1);
+var maze1 = gen.Generate(in template); // Template unchanged
+var maze2 = gen.Generate(in template); // Can reuse
+var maze3 = gen.Generate(in template); // Still unchanged
+```
+
+### 7. Validate Maze Connectivity
+```csharp
+// ✓ CORRECT - Verify your maze
+public bool IsFullyConnected(Maze maze)
+{
+    var visited = new HashSet<(int, int)>();
+    var queue = new Queue<(int, int)>();
+    
+    queue.Enqueue((1, 1));
+    visited.Add((1, 1));
+    
+    while (queue.Count > 0)
+    {
+        var (row, col) = queue.Dequeue();
+        var neighbors = maze.GetNeighbors(row, col);
+        
+        foreach (var neighbor in neighbors)
+        {
+            var pos = (neighbor.Row, neighbor.Column);
+            if (!visited.Contains(pos))
+            {
+                visited.Add(pos);
+                queue.Enqueue(pos);
+            }
+        }
+    }
+    
+    return visited.Count == maze.Rows * maze.Columns;
+}
+```
+
+### 8. Handle Algorithm Exceptions
+```csharp
+// ✓ CORRECT - Handle not implemented algorithms
+try
+{
+    var generator = new MazeGenerator(MazeAlgorithm.BinaryTree, seed: 123);
+    var maze = generator.Generate(in template);
+}
+catch (NotImplementedException ex)
+{
+    Console.WriteLine($"Algorithm not yet implemented: {ex.Message}");
+    // Fall back to a working algorithm
+    var fallback = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 123);
+    var maze = fallback.Generate(in template);
+}
+```
+
+### 9. Freeze Critical Sections
+```csharp
+// ✓ CORRECT - Protect important areas
+var template = new Maze(30, 30);
+
+// Freeze entrance corridor
+for (int col = 1; col <= 5; col++)
+{
+    template.FreezeCell(1, col);
+    if (col < 5)
+        template.ConnectCells(1, col, 1, col + 1);
+}
+
+// Freeze exit area  
+template.FreezeCell(30, 30);
+template.FreezeCell(30, 29);
+template.ConnectCells(30, 30, 30, 29);
+
+// Freeze critical junctions
+template.FreezeCell(15, 15);
+```
+
+### 10. Use Clone for Intermediate Modifications
+```csharp
+// ✓ CORRECT - Test modifications without affecting original
+var original = CreateMyComplexMaze();
+
+var test1 = original.Clone();
+test1.ConnectCells(5, 5, 5, 6);
+if (IsValid(test1))
+{
+    // Use test1
+}
+
+var test2 = original.Clone();
+test2.ConnectCells(5, 5, 6, 5);
+if (IsValid(test2))
+{
+    // Use test2
+}
+
+// Original is still unchanged
+```
+
+---
+
+## Common Patterns
+
+### Pattern 1: Template-Based Generation
+
+```csharp
+// Create reusable template
+public Maze CreateStandardTemplate(int size)
+{
+    var template = new Maze(size, size);
+    
+    // Always freeze corners
+    template.FreezeCell(1, 1);
+    template.FreezeCell(1, size);
+    template.FreezeCell(size, 1);
+    template.FreezeCell(size, size);
+    
+    return template;
+}
+
+// Use template for multiple generations
+var template = CreateStandardTemplate(20);
+var gen = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 123);
+
+var maze1 = gen.Generate(in template);
+var maze2 = gen.Generate(in template);
+var maze3 = gen.Generate(in template);
+```
+
+### Pattern 2: Progressive Difficulty
+
+```csharp
+public class DifficultyGenerator
+{
+    public Maze GenerateEasy(int size, int seed)
+    {
+        var template = new Maze(size, size);
+        // Add more frozen paths for easier navigation
+        CreateMainPath(template);
+        CreateShortcuts(template, count: 3);
+        
+        var gen = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed);
+        return gen.Generate(in template);
+    }
+    
+    public Maze GenerateHard(int size, int seed)
+    {
+        var template = new Maze(size, size);
+        // Minimal frozen cells for harder maze
+        template.FreezeCell(1, 1);
+        template.FreezeCell(size, size);
+        
+        var gen = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed);
+        return gen.Generate(in template);
+    }
+    
+    private void CreateMainPath(Maze maze) { /* ... */ }
+    private void CreateShortcuts(Maze maze, int count) { /* ... */ }
+}
+```
+
+### Pattern 3: Maze Serialization
+
+```csharp
+public class MazeSerializer
+{
+    public string Serialize(Maze maze)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"{maze.Rows},{maze.Columns}");
+        
+        for (int row = 1; row <= maze.Rows; row++)
+        {
+            for (int col = 1; col <= maze.Columns; col++)
+            {
+                var cell = maze.GetCell(row, col);
+                sb.Append(maze.IsCellFrozen(row, col) ? "F" : "U");
+                sb.Append("|");
+                
+                // Store connections
+                var neighbors = maze.GetNeighbors(row, col);
+                foreach (var n in neighbors)
+                {
+                    sb.Append($"{n.Row},{n.Column};");
+                }
+                sb.AppendLine();
+            }
+        }
+        
+        return sb.ToString();
+    }
+}
+```
+
+### Pattern 4: Algorithm Comparison
+
+```csharp
+public class AlgorithmComparer
+{
+    public void CompareAlgorithms(Maze template, int seed)
+    {
+        var algorithms = new[]
+        {
+            MazeAlgorithm.RandomWithValidPath,
+            // Add more when implemented
+        };
+        
+        foreach (var algo in algorithms)
+        {
+            try
+            {
+                var gen = new MazeGenerator(algo, seed);
+                var maze = gen.Generate(in template);
+                
+                Console.WriteLine($"{algo}:");
+                Console.WriteLine($"  Connectivity: {CheckConnectivity(maze)}");
+                Console.WriteLine($"  Avg Neighbors: {CalculateAvgNeighbors(maze):F2}");
+                Console.WriteLine($"  Dead Ends: {CountDeadEnds(maze)}");
+            }
+            catch (NotImplementedException)
+            {
+                Console.WriteLine($"{algo}: Not implemented");
+            }
+        }
+    }
+    
+    private bool CheckConnectivity(Maze maze) { /* BFS check */ }
+    private double CalculateAvgNeighbors(Maze maze) { /* Calculate */ }
+    private int CountDeadEnds(Maze maze) { /* Count cells with 1 neighbor */ }
+}
+```
+
+---
+
+## API Reference Summary
+
+### Core Classes
+
+| Class | Namespace | Purpose |
+|-------|-----------|---------|
+| `Cell` | `Models` | Basic cell with coordinates |
+| `MazeCell` | `Models` | Cell with connections and frozen state |
+| `Maze` | `DataStructures` | Grid structure with connection management |
+| `IMazeAlgorithm` | `Algorithms` | Interface for maze generation algorithms |
+| `MazeGenerator` | Root | Main entry point with factory pattern |
+| `RandomWithValidPathAlgorithm` | `Algorithms` | Specific algorithm implementation |
+
+### Key Methods
+
+| Method | Class | Returns | Description |
+|--------|-------|---------|-------------|
+| `ConnectCells()` | Maze | bool | Creates bidirectional connection |
+| `DisconnectCells()` | Maze | bool | Removes connection |
+| `FreezeCell()` | Maze | void | Prevents cell modification |
+| `IsCellFrozen()` | Maze | bool | Checks frozen status |
+| `Clone()` | Maze | Maze | Deep copies maze |
+| `Generate()` | MazeGenerator | Maze | Generates maze (immutable) |
+| `Generate()` | IMazeAlgorithm | Maze | Algorithm implementation |
+
+---
+
+## Version History
+
+**Version 2.0** (November 29, 2025)
+- Added `IMazeAlgorithm` interface for algorithm abstraction
+- Added `MazeGenerator` class with factory pattern
+- Added `RandomWithValidPathAlgorithm` implementation
+- Added `Clone()` method to Maze class for deep copying
+- Implemented call-by-value semantics (immutable generation)
+- Added `in` keyword for readonly parameters
+- Updated all examples and best practices
+
+**Version 1.0** (November 26, 2025)
+- Initial release
+- Cell, MazeCell, and Maze classes
+- Support for 1-based indexing
+- Freeze functionality
+- Adjacent-only connections
+
+---
+
+## License
+
+This documentation is part of the Maze Generator project by AmanRathoreP.
+
+---
+
+*Last Updated: November 29, 2025*
 
 ```csharp
 using maze_generation_algorithms.DataStructures;
@@ -776,6 +1278,474 @@ var middle = maze.GetAdjacentCells(5, 5);
 Console.WriteLine($"Middle adjacent: {middle.Count}"); // 4
 // Can connect to (6,5), (4,5), (5,6), and (5,4)
 ```
+
+#### `Clone()` → Maze
+Creates a deep copy of the maze with all cells, connections, and frozen states preserved in separate memory.
+
+**Returns**: A new `Maze` instance with identical structure
+
+**Example**:
+```csharp
+var maze = new Maze(10, 10);
+
+// Set up some connections and frozen cells
+maze.ConnectCells(1, 1, 1, 2);
+maze.ConnectCells(1, 2, 1, 3);
+maze.FreezeCell(1, 1);
+
+// Clone the maze
+var clonedMaze = maze.Clone();
+
+// The clone is independent - modifying it doesn't affect original
+clonedMaze.ConnectCells(2, 2, 2, 3);
+Console.WriteLine(maze.AreConnected(2, 2, 2, 3)); // Output: False (original unchanged)
+Console.WriteLine(clonedMaze.AreConnected(2, 2, 2, 3)); // Output: True (clone modified)
+
+// Frozen states are preserved
+Console.WriteLine(clonedMaze.IsCellFrozen(1, 1)); // Output: True
+
+// Connections are preserved
+Console.WriteLine(clonedMaze.AreConnected(1, 1, 1, 2)); // Output: True
+```
+
+**Implementation Details**:
+- Uses 3-pass algorithm for correctness:
+  1. First pass: Creates cell mapping
+  2. Second pass: Copies all connections (before freezing)
+  3. Third pass: Freezes cells after connections are established
+- Completely independent memory space
+- All frozen states and connections preserved exactly
+
+---
+
+## IMazeAlgorithm Interface
+
+**Namespace**: `maze_generation_algorithms.Algorithms`  
+**File**: `Algorithms/IMazeAlgorithm.cs`
+
+### Description
+Defines the contract that all maze generation algorithms must implement. Ensures consistent behavior across different algorithm implementations and enables the Strategy pattern for algorithm selection.
+
+### Interface Definition
+
+```csharp
+public interface IMazeAlgorithm
+{
+    Maze Generate(in Maze maze, in int seed);
+}
+```
+
+### Method Signature
+
+#### `Generate(in Maze maze, in int seed)` → Maze
+Generates a maze using the specific algorithm implementation.
+
+**Parameters**:
+- `maze` (Maze): The maze template to use. Marked with `in` keyword for readonly semantics.
+- `seed` (int): Random seed for reproducible generation. Marked with `in` keyword for readonly semantics.
+
+**Returns**: A new `Maze` instance with generated paths. The original maze is never modified.
+
+**Contract Guarantees**:
+- Original maze parameter is never modified (call-by-value semantics)
+- Returns a new maze instance in separate memory
+- Frozen cells and their connections are preserved
+- Same seed produces same result (reproducible)
+- All cells remain reachable (maintains connectivity)
+
+**Example Implementation**:
+```csharp
+public class MyCustomAlgorithm : IMazeAlgorithm
+{
+    public Maze Generate(in Maze maze, in int seed)
+    {
+        // Clone the input to avoid modifying original
+        var mazeCopy = maze.Clone();
+        
+        // Implement your algorithm logic here
+        // Work only on mazeCopy
+        
+        return mazeCopy;
+    }
+}
+```
+
+### Why Use This Interface?
+
+1. **Polymorphism**: Swap algorithms without changing client code
+2. **Testability**: Easy to mock for unit testing
+3. **Extensibility**: Add new algorithms by implementing the interface
+4. **Type Safety**: Compile-time checking of algorithm compatibility
+5. **Consistency**: All algorithms follow the same contract
+
+---
+
+## MazeGenerator Class
+
+**Namespace**: `maze_generation_algorithms`  
+**File**: `MazeGenerator.cs`
+
+### Description
+Main entry point for maze generation. Uses the Factory pattern to create algorithm instances and provides a clean API for generating mazes. Ensures immutability by never modifying input mazes.
+
+### Enums
+
+#### `MazeAlgorithm`
+Available maze generation algorithms.
+
+**Values**:
+- `BinaryTree` - Binary tree algorithm (not yet implemented)
+- `Prim` - Prim's algorithm (not yet implemented)
+- `RandomWithValidPath` - Random path generation with connectivity guarantee
+
+**Example**:
+```csharp
+var algorithm = MazeAlgorithm.RandomWithValidPath;
+```
+
+### Constructor
+
+#### `MazeGenerator(MazeAlgorithm algorithm, int seed)`
+Creates a new maze generator with the specified algorithm and seed.
+
+**Parameters**:
+- `algorithm` (MazeAlgorithm): The algorithm to use for maze generation
+- `seed` (int): Random seed for reproducible results
+
+**Example**:
+```csharp
+// Create generator with RandomWithValidPath algorithm
+var generator = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 12345);
+
+// Create with different seed for different results
+var generator2 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 67890);
+```
+
+### Methods
+
+#### `Generate(in Maze maze)` → Maze
+Generates a maze using the configured algorithm. The original maze is never modified.
+
+**Parameters**:
+- `maze` (Maze): The maze template. Original will not be modified. Marked with `in` for readonly.
+
+**Returns**: A new generated maze with connections. Original maze is unchanged.
+
+**Throws**:
+- `ArgumentNullException`: If maze is null
+- `NotImplementedException`: If selected algorithm is not yet implemented
+
+**Example**:
+```csharp
+// Create a blank 10x10 maze template
+var template = new Maze(10, 10);
+
+// Optionally freeze some cells
+template.FreezeCell(1, 1);
+template.FreezeCell(10, 10);
+
+// Generate maze
+var generator = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 12345);
+var generatedMaze = generator.Generate(in template);
+
+// Template is unchanged - can reuse for different variations
+var variation1 = generator.Generate(in template);
+var variation2 = generator.Generate(in template);
+
+// All three mazes (generatedMaze, variation1, variation2) are identical
+// because same seed was used
+```
+
+### Factory Method (Private)
+
+#### `CreateAlgorithm(MazeAlgorithm algorithm)` → IMazeAlgorithm
+Creates an instance of the appropriate algorithm implementation.
+
+**Parameters**:
+- `algorithm` (MazeAlgorithm): The algorithm enum value
+
+**Returns**: An instance implementing `IMazeAlgorithm`
+
+**Throws**:
+- `NotImplementedException`: For algorithms not yet implemented
+- `ArgumentException`: For unknown algorithm values
+
+**Internal Implementation**:
+```csharp
+private IMazeAlgorithm CreateAlgorithm(MazeAlgorithm algorithm)
+{
+    return algorithm switch
+    {
+        MazeAlgorithm.RandomWithValidPath => new RandomWithValidPathAlgorithm(),
+        MazeAlgorithm.BinaryTree => throw new NotImplementedException(...),
+        MazeAlgorithm.Prim => throw new NotImplementedException(...),
+        _ => throw new ArgumentException(...)
+    };
+}
+```
+
+---
+
+## RandomWithValidPath Algorithm
+
+**Namespace**: `maze_generation_algorithms.Algorithms`  
+**File**: `Algorithms/RandomWithValidPathAlgorithm.cs`  
+**Implements**: `IMazeAlgorithm`
+
+### Description
+Generates a maze by randomly adding connections while ensuring all cells remain reachable. Creates a sparse maze structure (minimal loops) with guaranteed connectivity. Respects frozen cells and their connections.
+
+### Algorithm Overview
+
+The algorithm works in several phases:
+
+1. **Clone Input**: Creates deep copy to avoid modifying original
+2. **Edge Collection**: Gathers all potential edges between adjacent cells
+3. **Edge Separation**: Separates frozen edges from modifiable edges
+4. **Random Shuffling**: Randomizes the order of non-frozen edges
+5. **Selective Connection**: For each edge in random order:
+   - If cells aren't connected via any path → Add connection (ensures connectivity)
+   - If cells already connected → 10% chance to add (creates sparse loops)
+6. **Return**: Returns the modified copy
+
+### Key Characteristics
+
+- **Guaranteed Connectivity**: All cells are reachable from any other cell
+- **Sparse Structure**: Minimal loops (10% redundant connections)
+- **Frozen Cell Respect**: Never modifies frozen cell connections
+- **Reproducible**: Same seed produces identical maze
+- **Efficient**: Uses BFS for connectivity checking
+
+### Method
+
+#### `Generate(in Maze maze, in int seed)` → Maze
+Implements the IMazeAlgorithm interface.
+
+**Parameters**:
+- `maze` (Maze): Template maze (not modified)
+- `seed` (int): Random seed for reproducibility
+
+**Returns**: New maze with random valid paths
+
+**Example**:
+```csharp
+var template = new Maze(15, 15);
+
+// Set up a frozen corridor
+template.ConnectCells(1, 1, 1, 2);
+template.ConnectCells(1, 2, 1, 3);
+template.FreezeCell(1, 1);
+template.FreezeCell(1, 2);
+template.FreezeCell(1, 3);
+
+var algorithm = new RandomWithValidPathAlgorithm();
+var generatedMaze = algorithm.Generate(in template, in 12345);
+
+// Template unchanged, generatedMaze has new structure
+// Frozen corridor preserved exactly
+Console.WriteLine(generatedMaze.AreConnected(1, 1, 1, 2)); // True (preserved)
+Console.WriteLine(generatedMaze.IsCellFrozen(1, 1)); // True (preserved)
+```
+
+### Private Helper Methods
+
+#### `GetAllPotentialEdges(Maze maze)` → List<(MazeCell, MazeCell)>
+Collects all potential edges (pairs of adjacent cells) in the maze.
+
+**Parameters**:
+- `maze` (Maze): The maze to analyze
+
+**Returns**: List of cell pairs representing all possible connections
+
+**Logic**:
+- Iterates through all cells
+- For each cell, checks right and bottom neighbors
+- Avoids duplicate edges (only stores each edge once)
+
+#### `AreConnectedThroughPath(Maze maze, MazeCell start, MazeCell target)` → bool
+Checks if two cells are already connected through any path using BFS traversal.
+
+**Parameters**:
+- `maze` (Maze): The maze to check
+- `start` (MazeCell): Starting cell
+- `target` (MazeCell): Target cell
+
+**Returns**: `true` if path exists; otherwise `false`
+
+**Algorithm**: Breadth-First Search (BFS)
+
+#### `IsFullyConnected(Maze maze)` → bool
+Verifies that all cells in the maze are reachable from any starting point.
+
+**Parameters**:
+- `maze` (Maze): The maze to validate
+
+**Returns**: `true` if all cells are connected; otherwise `false`
+
+**Algorithm**: BFS from (1,1), counts visited cells
+
+### Algorithm Complexity
+
+- **Time Complexity**: O(V * E) where V = cells, E = edges
+  - Each edge is processed once
+  - BFS for each edge is O(V + E)
+- **Space Complexity**: O(V + E)
+  - Stores all edges
+  - BFS visited set
+
+### Maze Characteristics
+
+Mazes generated by this algorithm have:
+- **High Difficulty**: Many dead ends due to sparse connections
+- **Single Solution Paths**: Minimal loops mean fewer alternative routes
+- **Good for Puzzles**: Clear start-to-end challenges
+- **Efficient**: Fast generation even for large mazes
+
+### Customization
+
+To adjust maze density, modify the redundant connection probability:
+
+```csharp
+// Current: 10% chance for redundant connections
+if (random.NextDouble() < 0.1)
+
+// More loops (easier maze): increase to 0.3 (30%)
+if (random.NextDouble() < 0.3)
+
+// Fewer loops (harder maze): decrease to 0.05 (5%)
+if (random.NextDouble() < 0.05)
+
+// No loops (perfect maze): remove this block entirely
+```
+
+---
+
+## Usage Examples
+
+### Example 1: Basic Maze Generation
+
+```csharp
+using maze_generation_algorithms;
+using maze_generation_algorithms.DataStructures;
+
+// Create a 20x20 maze template
+var template = new Maze(20, 20);
+
+// Create generator with specific algorithm and seed
+var generator = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 12345);
+
+// Generate maze (template is not modified)
+var maze = generator.Generate(in template);
+
+// Verify maze properties
+Console.WriteLine($"Maze size: {maze.Rows}x{maze.Columns}");
+
+// Check a specific cell's connections
+var neighbors = maze.GetNeighbors(10, 10);
+Console.WriteLine($"Cell (10,10) has {neighbors.Count} connections");
+```
+
+### Example 2: Maze Generation with Frozen Sections
+
+```csharp
+using maze_generation_algorithms;
+using maze_generation_algorithms.DataStructures;
+
+// Create template
+var template = new Maze(20, 20);
+
+// Create a preserved starting corridor
+for (int col = 1; col <= 5; col++)
+{
+    template.FreezeCell(1, col);
+    if (col < 5)
+        template.ConnectCells(1, col, 1, col + 1);
+}
+
+// Create a preserved ending area
+template.FreezeCell(20, 20);
+template.FreezeCell(20, 19);
+template.FreezeCell(19, 20);
+template.ConnectCells(20, 20, 20, 19);
+template.ConnectCells(20, 20, 19, 20);
+
+// Generate maze
+var generator = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 99999);
+var maze = generator.Generate(in template);
+
+// Frozen sections are preserved
+Console.WriteLine(maze.AreConnected(1, 1, 1, 2)); // True (preserved)
+Console.WriteLine(maze.IsCellFrozen(1, 1)); // True (preserved)
+Console.WriteLine(maze.AreConnected(20, 20, 20, 19)); // True (preserved)
+```
+
+### Example 3: Generating Multiple Variations
+
+```csharp
+// Create one template
+var template = new Maze(15, 15);
+
+// Generate multiple mazes with different seeds
+var gen1 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 1);
+var gen2 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 2);
+var gen3 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed: 3);
+
+var maze1 = gen1.Generate(in template);
+var maze2 = gen2.Generate(in template);
+var maze3 = gen3.Generate(in template);
+
+// All three mazes are different because of different seeds
+// Template remains unchanged and can be reused
+```
+
+### Example 4: Reproducible Maze Generation
+
+```csharp
+var template = new Maze(10, 10);
+int seed = 42;
+
+// Generate first maze
+var generator1 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed);
+var maze1 = generator1.Generate(in template);
+
+// Generate second maze with same seed
+var generator2 = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, seed);
+var maze2 = generator2.Generate(in template);
+
+// Both mazes are identical
+// Can verify by checking connections at same positions
+Console.WriteLine(maze1.AreConnected(5, 5, 5, 6) == 
+                  maze2.AreConnected(5, 5, 5, 6)); // True
+```
+
+### Example 5: Cloning Mazes
+
+```csharp
+// Create and populate a maze
+var originalMaze = new Maze(10, 10);
+originalMaze.ConnectCells(1, 1, 1, 2);
+originalMaze.ConnectCells(1, 2, 2, 2);
+originalMaze.FreezeCell(1, 1);
+
+// Clone the maze
+var clonedMaze = originalMaze.Clone();
+
+// Modify the clone
+clonedMaze.ConnectCells(3, 3, 3, 4);
+
+// Original is unchanged
+Console.WriteLine(originalMaze.AreConnected(3, 3, 3, 4)); // False
+Console.WriteLine(clonedMaze.AreConnected(3, 3, 3, 4)); // True
+
+// Both have the original connections
+Console.WriteLine(originalMaze.AreConnected(1, 1, 1, 2)); // True
+Console.WriteLine(clonedMaze.AreConnected(1, 1, 1, 2)); // True
+
+// Frozen states are preserved
+Console.WriteLine(clonedMaze.IsCellFrozen(1, 1)); // True
+```
+
+### Example 6: Complete Workflow
 
 ### Example 6: Complete Maze Generation Pattern
 
