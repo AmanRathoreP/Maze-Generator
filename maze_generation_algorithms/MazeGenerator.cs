@@ -9,6 +9,11 @@ public enum MazeAlgorithm
     BinaryTree,
     Prim,
     RandomWithValidPath,
+    Kruskal,
+    DepthFirstSearch,
+    BfsTree,
+    HuntAndKill,
+    RecursiveDivision,
 }
 
 /// <summary>
@@ -54,9 +59,14 @@ public class MazeGenerator
         return algorithm switch
         {
             MazeAlgorithm.RandomWithValidPath => new RandomWithValidPathAlgorithm(),
-            MazeAlgorithm.BinaryTree => throw new NotImplementedException("BinaryTree algorithm not yet implemented"),
-            MazeAlgorithm.Prim => throw new NotImplementedException("Prim algorithm not yet implemented"),
-            _ => throw new ArgumentException($"Unknown algorithm: {algorithm}", nameof(algorithm))
+            MazeAlgorithm.BinaryTree => new BinaryTreeAlgorithm(),
+            MazeAlgorithm.Prim => new PrimAlgorithm(),
+            MazeAlgorithm.Kruskal => new KruskalAlgorithm(),
+            MazeAlgorithm.DepthFirstSearch => new DepthFirstSearchAlgorithm(),
+            MazeAlgorithm.BfsTree => new BfsTreeAlgorithm(),
+            MazeAlgorithm.HuntAndKill => new HuntAndKillAlgorithm(),
+            MazeAlgorithm.RecursiveDivision => new RecursiveDivisionAlgorithm(),
+            _ => throw new ArgumentException($"Unknown algorithm: {algorithm}", nameof(algorithm)),
         };
     }
 }

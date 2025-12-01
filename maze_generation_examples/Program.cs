@@ -30,11 +30,33 @@ maze.FreezeAndConnectCells(new List<(int, int)>
         (1, 2),
     });
 
+// Directory: bin/mazes under current working directory
+string binDir = Path.Combine(Directory.GetCurrentDirectory(), "bin");
+string mazesDir = Path.Combine(binDir, "mazes");
+Directory.CreateDirectory(mazesDir);
 
-var generator = new MazeGenerator(MazeAlgorithm.RandomWithValidPath, 54871);
-var generatedMaze = generator.Generate(in maze);
+// Common seed for reproducibility
+const int seed = 54871;
 
-// Save visualization
-MazeVisualizer.SaveMaze(generatedMaze, Path.Combine(Directory.GetCurrentDirectory(), "bin/maze_visualization.png"));
+// Loop over all algorithms in the enum
+foreach (MazeAlgorithm algorithm in Enum.GetValues<MazeAlgorithm>())
+{
+    Console.WriteLine($"Generating maze with algorithm: {algorithm}");
 
-Console.WriteLine("Done. Maze visualization saved.");
+    var generator = new MazeGenerator(algorithm, seed);
+
+    // Use the same base maze as template; MazeGenerator/algorithms
+    // internally clone it, so baseMaze is not mutated.
+    Maze generatedMaze = generator.Generate(in maze);
+
+    // File name: e.g., BinaryTree.png, Prim.png, RandomWithValidPath.png, etc.
+    string fileName = $"{algorithm}.png";
+    string filePath = Path.Combine(mazesDir, fileName);
+
+    MazeVisualizer.SaveMaze(generatedMaze, filePath);
+
+    Console.WriteLine($"Saved: {filePath}");
+}
+
+Console.WriteLine("Done. All maze visualizations saved in bin/mazes.");
+
